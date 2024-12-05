@@ -2,5 +2,5 @@
 
 public class Cards
 {
-    // Implementation der Cards Klasse
+    // Implementation of the Cards Class
 }
