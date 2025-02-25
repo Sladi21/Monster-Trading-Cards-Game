@@ -2,31 +2,56 @@
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Npgsql;
 
 namespace Monster_Trading_Cards_Game;
 
-internal class ParsedRequest
+public class ParsedRequest
 {
     public string Method { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
-    public string HttpVersion { get; set; } = string.Empty;
-    public Dictionary<string, string> Headers { get; set; } = new Dictionary<string, string>();
+    public Dictionary<string, string> Headers { get; } = new();
     public string Body { get; set; } = string.Empty;
 }
 public static class Server
 {
     private static TcpListener? _server;
-    private static readonly Dictionary<string, User> Users = new();
-    private static readonly Dictionary<string, Func<ParsedRequest, string>> Routes = new();
-
+    private static readonly Dictionary<string, Func<ParsedRequest, (int, string)>> Routes = new();
+    
+    private static void TestDatabaseConnection()
+    {
+        try
+        {
+            using var conn = DatabaseConfig.GetConnection();
+            conn.Open();
+            Console.WriteLine("Database connection successful!");
+        }
+        catch (NpgsqlException ex)
+        {
+            Console.WriteLine($"Database connection failed: {ex.Message}");
+            Environment.Exit(1);
+        }
+    }
+    
     public static void RunServer()
     {
+        Console.WriteLine("Initializing database connection...");
+        TestDatabaseConnection();
+        
         _server = new TcpListener(IPAddress.Parse("127.0.0.1"), 8080);
         _server.Start();
 
-        Routes["POST:/register"] = RegisterUser;
-        Routes["POST:/login"] = LoginUser;
-
+        Routes["POST:/users"] = User.RegisterUser;
+        Routes["POST:/sessions"] = User.LoginUser;
+        //Routes["POST:/transactions/packages"] = BuyPackage;
+        //Routes["GET:/cards"] = GetUserCards;
+        //Routes["GET:/deck"] = GetUserDeck;
+        //Routes["GET:/stats"] = GetStats;
+        //Routes["GET:/scoreboard"] = GetScoreboard;
+        //Routes["POST:/battles"] = EnterLobbyForBattle;
+        //Routes["GET:/tradings"] = GetTradingDeals;
+        
         Console.WriteLine("Server started at http://127.0.0.1:8080");
 
         while (true)
@@ -42,14 +67,43 @@ public static class Server
             Console.WriteLine($"Received Request: {parsedRequest.Method} {parsedRequest.Path}");
 
             var routeKey = $"{parsedRequest.Method}:{parsedRequest.Path}";
-            var responseBody = Routes.ContainsKey(routeKey) 
-                ? Routes[routeKey](parsedRequest) 
-                : "{\"error\": \"Not Found\"}";
-
-            var response = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {responseBody.Length}\r\n\r\n{responseBody}";
-            var responseBytes = Encoding.UTF8.GetBytes(response);
-            stream.Write(responseBytes, 0, responseBytes.Length);
+            if (Routes.ContainsKey(routeKey))
+            {
+                var (statusCode, responseBody) = Routes[routeKey](parsedRequest);
+                SendResponse(stream, statusCode, responseBody);
+            }
+            else
+            {
+                SendResponse(stream, 404, "{\"error\": \"Not Found\"}");
+            }
         }
+    }
+    
+    private static string GetStatusMessage(int statusCode)
+    {
+        return statusCode switch
+        {
+            200 => "OK",
+            201 => "Created",
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            403 => "Forbidden",
+            404 => "Not Found",
+            409 => "Conflict",
+            500 => "Internal Server Error",
+            _ => "Unknown"
+        };
+    }
+    
+    private static void SendResponse(NetworkStream stream, int statusCode, string body)
+    {
+        var response = $"HTTP/1.1 {statusCode} {GetStatusMessage(statusCode)}\r\n"
+                       + "Content-Type: application/json\r\n"
+                       + $"Content-Length: {Encoding.UTF8.GetByteCount(body)}\r\n\r\n"
+                       + body;
+
+        var responseBytes = Encoding.UTF8.GetBytes(response);
+        stream.Write(responseBytes, 0, responseBytes.Length);
     }
 
     private static ParsedRequest ParseRequest(string request)
@@ -60,7 +114,6 @@ public static class Server
         var requestLine = lines[0].Split(' ');
         parsedRequest.Method = requestLine[0];
         parsedRequest.Path = requestLine[1];
-        parsedRequest.HttpVersion = requestLine[2];
 
         var i = 1;
         while (!string.IsNullOrWhiteSpace(lines[i]))
@@ -82,66 +135,21 @@ public static class Server
         return parsedRequest;
     }
 
-    private static string RegisterUser(ParsedRequest request)
+    // Retrieves the users scoreboard ordered by the users ELO
+    private static string GetScoreboard(ParsedRequest request)
     {
-        Console.WriteLine($"Request Body: {request.Body}");
-
-        if (string.IsNullOrWhiteSpace(request.Body))
-        {
-            return "{\"error\": \"Request body is empty\"}";
-        }
-
-        try
-        {
-            var userData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(request.Body);
-
-            if (userData == null || !userData.ContainsKey("username") || !userData.ContainsKey("password"))
-            {
-                return "{\"error\": \"Invalid data\"}";
-            }
-
-            var username = userData["username"];
-            var password = userData["password"];
-
-            if (Users.ContainsKey(username))
-            {
-                return "{\"error\": \"User already exists\"}";
-            }
-
-            Users[username] = new User { Username = username, Password = password };
-            return "{\"message\": \"User registered successfully\"}";
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            Console.WriteLine($"JSON Parsing Error: {ex.Message}");
-            return "{\"error\": \"Invalid JSON format\"}";
-        }
+        throw new NotImplementedException();
     }
 
-    private static string LoginUser(ParsedRequest request)
+    // Enters lobby to start a battle
+    private static string EnterLobbyForBattle(ParsedRequest request)
     {
-        var loginData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(request.Body);
-        if (loginData == null || !loginData.ContainsKey("username") || !loginData.ContainsKey("password"))
-        {
-            return "{\"error\": \"Invalid data\"}";
-        }
-
-        var username = loginData["username"];
-        var password = loginData["password"];
-
-        if (!Users.ContainsKey(username) || Users[username].Password != password)
-        {
-            return "{\"error\": \"Invalid username or password\"}";
-        }
-
-        var token = GenerateToken();
-        Users[username].Token = token;
-
-        return $"{{\"message\": \"Login successful\", \"token\": \"{token}\"}}";
+        throw new NotImplementedException();
     }
 
-    private static string GenerateToken()
+    // Retrieve currently available trading deals
+    private static string GetTradingDeals(ParsedRequest request)
     {
-        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        throw new NotImplementedException();
     }
 }
