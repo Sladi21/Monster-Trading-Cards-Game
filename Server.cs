@@ -44,13 +44,17 @@ public static class Server
 
         Routes["POST:/users"] = User.RegisterUser;
         Routes["POST:/sessions"] = User.LoginUser;
-        //Routes["POST:/transactions/packages"] = BuyPackage;
-        //Routes["GET:/cards"] = GetUserCards;
-        //Routes["GET:/deck"] = GetUserDeck;
-        //Routes["GET:/stats"] = GetStats;
-        //Routes["GET:/scoreboard"] = GetScoreboard;
+        //Routes["GET:/users/{username}"] = User....
+        Routes["POST:/transactions/packages"] = TransactionService.BuyPackage;
+        Routes["GET:/cards"] = User.GetCards;
+        Routes["GET:/deck"] = User.GetDeck;
+        Routes["POST:/deck"] = User.UpdateDeck;
+        Routes["GET:/stats"] = User.GetStats;
+        Routes["GET:/scoreboard"] = User.GetScoreboard;
+        Routes["POST:/logout"] = User.Logout;
         //Routes["POST:/battles"] = EnterLobbyForBattle;
         //Routes["GET:/tradings"] = GetTradingDeals;
+        //Routes["DELETE:/tradings/{tradingdealid}"] = Cards....
         
         Console.WriteLine("Server started at http://127.0.0.1:8080");
 
@@ -85,6 +89,7 @@ public static class Server
         {
             200 => "OK",
             201 => "Created",
+            204 => "No Content",
             400 => "Bad Request",
             401 => "Unauthorized",
             403 => "Forbidden",
