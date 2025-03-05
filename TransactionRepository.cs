@@ -9,15 +9,15 @@ public class TransactionRepository
     private static readonly string ConnectionString = "Host=localhost;Username=postgres;Password=Passw0rd;Database=mtcg_db";
 
     // 🔹 Fetch user by token and also get their player_cards JSONB field
-    public static (string? username, int coins, List<object> playerCards) GetUserByToken(string token)
+    public static async Task<(string? username, int coins, List<object> playerCards)> GetUserByTokenAsync(string token)
     {
-        using var conn = new NpgsqlConnection(ConnectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand("SELECT username, coins, player_cards FROM users WHERE token = @token", conn);
+        await using var cmd = new NpgsqlCommand("SELECT username, coins, player_cards FROM users WHERE token = @token", conn);
         cmd.Parameters.AddWithValue("token", token);
 
-        using var reader = cmd.ExecuteReader();
+        await using var reader = await cmd.ExecuteReaderAsync();
         if (reader.Read())
         {
             var username = reader.GetString(0);
@@ -33,17 +33,17 @@ public class TransactionRepository
     }
 
     // 🔹 Fetch 5 random cards from the `cards` table
-    public static List<object> GetRandomCards(int count)
+    public static async Task<List<object>> GetRandomCardsAsync(int count)
     {
         var cards = new List<object>();
 
-        using var conn = new NpgsqlConnection(ConnectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand("SELECT id, name, damage FROM cards ORDER BY RANDOM() LIMIT @count", conn);
+        await using var cmd = new NpgsqlCommand("SELECT id, name, damage FROM cards ORDER BY RANDOM() LIMIT @count", conn);
         cmd.Parameters.AddWithValue("count", count);
 
-        using var reader = cmd.ExecuteReader();
+        await using var reader = await cmd.ExecuteReaderAsync();
         while (reader.Read())
         {
             var card = new
@@ -60,31 +60,31 @@ public class TransactionRepository
     }
 
     // 🔹 Update user's player_cards JSONB field
-    public static void UpdateUserCards(string username, List<object> updatedCards)
+    public static async Task UpdateUserCardsAsync(string username, List<object> updatedCards)
     {
-        using var conn = new NpgsqlConnection(ConnectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
 
         // 🔹 Convert list to JSON string
         string jsonCards = JsonSerializer.Serialize(updatedCards);
 
         // 🔹 Update JSONB field (ensure parameter type is set correctly)
-        using var cmd = new NpgsqlCommand("UPDATE users SET player_cards = @cards::jsonb WHERE username = @username", conn);
+        await using var cmd = new NpgsqlCommand("UPDATE users SET player_cards = @cards::jsonb WHERE username = @username", conn);
         cmd.Parameters.AddWithValue("username", username);
         cmd.Parameters.AddWithValue("cards", NpgsqlTypes.NpgsqlDbType.Jsonb, jsonCards); // Correctly cast as JSONB
 
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 
     // 🔹 Deduct coins from user
-    public static void DeductUserCoins(string username, int amount)
+    public static async Task DeductUserCoinsAsync(string username, int amount)
     {
-        using var conn = new NpgsqlConnection(ConnectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand("UPDATE users SET coins = coins - @amount WHERE username = @username", conn);
+        await using var cmd = new NpgsqlCommand("UPDATE users SET coins = coins - @amount WHERE username = @username", conn);
         cmd.Parameters.AddWithValue("amount", amount);
         cmd.Parameters.AddWithValue("username", username);
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 }

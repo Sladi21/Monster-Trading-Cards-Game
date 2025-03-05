@@ -8,23 +8,23 @@ public class UserRepository
 {
     private readonly string _connectionString = "Host=localhost;Username=postgres;Password=Passw0rd;Database=mtcg_db";
     
-    public bool UserExists(string username)
+    public async Task<bool> UserExistsAsync(string username)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE username = @username", conn);
+        await using var cmd = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE username = @username", conn);
         cmd.Parameters.AddWithValue("username", username);
 
-        return (long)cmd.ExecuteScalar() > 0;
+        return (long)(await cmd.ExecuteScalarAsync()) > 0;
     }
 
-    public void InsertUser(string username, string passwordHash, string salt)
+    public async Task InsertUserAsync(string username, string passwordHash, string salt)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand(@"
+        await using var cmd = new NpgsqlCommand(@"
             INSERT INTO users (username, password_hash, salt, coins, wins, losses, elo, token)
             VALUES (@username, @passwordhash, @salt, @coins, @wins, @losses, @elo, @token)", conn);
 
@@ -37,19 +37,19 @@ public class UserRepository
         cmd.Parameters.AddWithValue("elo", 100);
         cmd.Parameters.AddWithValue("token", ""); 
 
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 
-    public (string passwordHash, string salt)? GetUserCredentials(string username)
+    public async Task<(string passwordHash, string salt)?> GetUserCredentialsAsync(string username)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand("SELECT password_hash, salt FROM users WHERE username = @username", conn);
+        await using var cmd = new NpgsqlCommand("SELECT password_hash, salt FROM users WHERE username = @username", conn);
         cmd.Parameters.AddWithValue("username", username);
 
-        using var reader = cmd.ExecuteReader();
-        if (reader.Read())
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (await reader.ReadAsync())
         {
             return (reader.GetString(0), reader.GetString(1));
         }
@@ -57,27 +57,27 @@ public class UserRepository
         return null;
     }
 
-    public void UpdateUserToken(string username, string token)
+    public async Task UpdateUserTokenAsync(string username, string token)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        using var cmd = new NpgsqlCommand("UPDATE users SET token = @token WHERE username = @username", conn);
+        await using var cmd = new NpgsqlCommand("UPDATE users SET token = @token WHERE username = @username", conn);
         cmd.Parameters.AddWithValue("username", username);
         cmd.Parameters.AddWithValue("token", token);
 
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 
-    public (string? username, List<object> playerCards) GetUserCards(string token)
+    public async Task<(string? username, List<object> playerCards)> GetUserCardsAsync(string token)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
         
-        using var cmd = new NpgsqlCommand("SELECT username, player_cards FROM users WHERE token = @token", conn);
+        await using var cmd = new NpgsqlCommand("SELECT username, player_cards FROM users WHERE token = @token", conn);
         cmd.Parameters.AddWithValue("token", token);
 
-        using var reader = cmd.ExecuteReader();
+        await using var reader = await cmd.ExecuteReaderAsync();
         if (reader.Read())
         {
             var username = reader.GetString(0);
@@ -92,15 +92,15 @@ public class UserRepository
         return (null, new List<object>());
     }
 
-    public (string? username, List<object> playerDeck) GetUserDeck(string token)
+    public async Task <(string? username, List<object> playerDeck)> GetUserDeckAsync(string token)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
         
-        using var cmd = new NpgsqlCommand("SELECT username, player_deck FROM users WHERE token = @token", conn);
+        await using var cmd = new NpgsqlCommand("SELECT username, player_deck FROM users WHERE token = @token", conn);
         cmd.Parameters.AddWithValue("token", token);
         
-        using var reader = cmd.ExecuteReader();
+        await using var reader = await cmd.ExecuteReaderAsync();
         if (reader.Read())
         {
             var username = reader.GetString(0);
@@ -115,15 +115,15 @@ public class UserRepository
         return (null, new List<object>());
     }
 
-    public (string? username, int userCoins, int userWins, int userLosses, int userElo) GetUserStats(string token)
+    public async Task<(string? username, int userCoins, int userWins, int userLosses, int userElo)> GetUserStatsAsync(string token)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
         
-        using var cmd = new NpgsqlCommand("SELECT username, coins, wins, losses, elo FROM users WHERE token = @token", conn);
+        await using var cmd = new NpgsqlCommand("SELECT username, coins, wins, losses, elo FROM users WHERE token = @token", conn);
         cmd.Parameters.AddWithValue("token", token);
         
-        using var reader = cmd.ExecuteReader();
+        await using var reader = await cmd.ExecuteReaderAsync();
         if (reader.Read())
         {
             var username = reader.GetString(0);
@@ -139,16 +139,16 @@ public class UserRepository
     }
     
     // Retrieves the user scoreboard ordered by the user's ELO.
-    public List<(string username, int userCoins, int userWins, int userLosses, int userElo)> GetScoreboard()
+    public async Task<List<(string username, int userCoins, int userWins, int userLosses, int userElo)>> GetScoreboardAsync()
     {
         var userStatsList = new List<(string, int, int, int, int)>();
         
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
         
-        using var cmd = new NpgsqlCommand("SELECT username, coins, wins, losses, elo FROM users ORDER BY elo DESC", conn);
+        await using var cmd = new NpgsqlCommand("SELECT username, coins, wins, losses, elo FROM users ORDER BY elo DESC", conn);
         
-        using var reader = cmd.ExecuteReader();
+        await using var reader = await cmd.ExecuteReaderAsync();
         while (reader.Read())
         {
             var username = reader.GetString(0);
@@ -163,13 +163,13 @@ public class UserRepository
         return userStatsList;
     }
     
-    public void SetUserDeck(string username, List<int> cardIds)
+    public async Task SetUserDeckAsync(string username, List<int> cardIds)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
-        conn.Open();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
         // 🔹 Fetch all player's cards (stored as JSONB)
-        using var fetchCmd = new NpgsqlCommand("SELECT player_cards FROM users WHERE username = @username", conn);
+        await using var fetchCmd = new NpgsqlCommand("SELECT player_cards FROM users WHERE username = @username", conn);
         fetchCmd.Parameters.AddWithValue("username", username);
 
         string playerCardsJson = fetchCmd.ExecuteScalar()?.ToString() ?? "[]"; // Ensure it's never null
@@ -181,25 +181,25 @@ public class UserRepository
             .ToList();
 
         // 🔹 Save the full card objects in player_deck
-        using var cmd = new NpgsqlCommand("UPDATE users SET player_deck = @deck WHERE username = @username", conn);
+        await using var cmd = new NpgsqlCommand("UPDATE users SET player_deck = @deck WHERE username = @username", conn);
         cmd.Parameters.AddWithValue("username", username);
     
         string jsonDeck = JsonSerializer.Serialize(selectedCards);
         cmd.Parameters.Add("deck", NpgsqlDbType.Jsonb).Value = jsonDeck;
 
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 
-    public bool LogoutUser(string token)
+    public async Task<bool> LogoutUserAsync(string token)
     {
-        using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         conn.Open();
 
         // Check if the token exists
-        using var checkCmd = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE token = @token", conn);
+        await using var checkCmd = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE token = @token", conn);
         checkCmd.Parameters.AddWithValue("token", token);
 
-        var count = (long)checkCmd.ExecuteScalar(); // ExecuteScalar returns object, cast to long
+        var count = (long) await checkCmd.ExecuteScalarAsync(); // ExecuteScalar returns object, cast to long
 
         if (count == 0)
         {
@@ -207,11 +207,11 @@ public class UserRepository
         }
 
         // Invalidate the token by replacing it with a new random value
-        using var updateCmd = new NpgsqlCommand("UPDATE users SET token = @newToken WHERE token = @oldToken", conn);
+        await using var updateCmd = new NpgsqlCommand("UPDATE users SET token = @newToken WHERE token = @oldToken", conn);
         updateCmd.Parameters.AddWithValue("newToken", Guid.NewGuid().ToString());
         updateCmd.Parameters.AddWithValue("oldToken", token);
 
-        updateCmd.ExecuteNonQuery();
+        await updateCmd.ExecuteNonQueryAsync();
         return true; // Logout successful
     }
 

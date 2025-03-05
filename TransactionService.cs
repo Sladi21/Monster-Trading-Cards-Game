@@ -5,9 +5,9 @@ namespace Monster_Trading_Cards_Game;
 
 public class TransactionService
 {
-    private const int PackageCost = 20;
+    private const int PackageCost = 5;
 
-    public static (int statusCode, string responseBody) BuyPackage(ParsedRequest request)
+    public static async Task<(int statusCode, string responseBody)> BuyPackageAsync(ParsedRequest request)
     {
         try
         {
@@ -20,7 +20,7 @@ public class TransactionService
             var token = authHeader.Substring("Bearer ".Length).Trim();
 
             // 🔹 Validate token and get user info
-            var (username, userCoins, userCards) = TransactionRepository.GetUserByToken(token);
+            var (username, userCoins, userCards) = await TransactionRepository.GetUserByTokenAsync(token);
             if (username == null)
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Invalid token." }));
@@ -33,7 +33,7 @@ public class TransactionService
             }
 
             // 🔹 Get 5 random cards
-            var newCards = TransactionRepository.GetRandomCards(5);
+            var newCards = await TransactionRepository.GetRandomCardsAsync(5);
             if (newCards.Count < 5)
             {
                 return (500, JsonSerializer.Serialize(new { error = "Not enough cards available" }));
@@ -44,10 +44,10 @@ public class TransactionService
             updatedCards.AddRange(newCards);
 
             // 🔹 Assign new cards to user in JSONB format
-            TransactionRepository.UpdateUserCards(username, updatedCards);
+            await TransactionRepository.UpdateUserCardsAsync(username, updatedCards);
 
             // 🔹 Deduct coins
-            TransactionRepository.DeductUserCoins(username, PackageCost);
+            await TransactionRepository.DeductUserCoinsAsync(username, PackageCost);
 
             return (200, JsonSerializer.Serialize(new { message = "Package purchased successfully", cards = newCards }));
         }
