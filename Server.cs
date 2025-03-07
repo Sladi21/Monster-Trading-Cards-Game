@@ -1,7 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
 using Npgsql;
 
 namespace Monster_Trading_Cards_Game;
@@ -10,7 +9,7 @@ public class ParsedRequest
 {
     public string Method { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
-    public Dictionary<string, string> Headers { get; } = new();
+    public Dictionary<string, string> Headers { get; set; } = new();
     public string Body { get; set; } = string.Empty;
 }
 

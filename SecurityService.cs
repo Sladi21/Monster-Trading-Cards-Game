@@ -3,9 +3,9 @@ using System.Text;
 
 namespace Monster_Trading_Cards_Game;
 
-public static class SecurityService
+public class SecurityService
 {
-    public static (string hash, string salt) CalculatePasswordHashAndSalt(string password)
+    public (string hash, string salt) CalculatePasswordHashAndSalt(string password)
     {
         var saltBytes = new byte[16];
         using (var rng = RandomNumberGenerator.Create())
@@ -22,7 +22,7 @@ public static class SecurityService
         return (hash, salt);
     }
 
-    public static bool VerifyPassword(string inputPassword, string storedHash, string storedSalt)
+    public bool VerifyPassword(string inputPassword, string storedHash, string storedSalt)
     {
         var saltedInput = storedSalt + inputPassword;
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(saltedInput));

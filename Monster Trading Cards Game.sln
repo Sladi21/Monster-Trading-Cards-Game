@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Monster Trading Cards Game", "Monster Trading Cards Game.csproj", "{9091D205-94DB-4433-83DE-1A23A7309B22}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Monster Trading Cards Game.Tests", "..\Monster Trading Cards Game.Tests\Monster Trading Cards Game.Tests.csproj", "{30BE6183-EAAA-405B-A4FD-9BCFB8D1D3FD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{9091D205-94DB-4433-83DE-1A23A7309B22}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9091D205-94DB-4433-83DE-1A23A7309B22}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9091D205-94DB-4433-83DE-1A23A7309B22}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30BE6183-EAAA-405B-A4FD-9BCFB8D1D3FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30BE6183-EAAA-405B-A4FD-9BCFB8D1D3FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30BE6183-EAAA-405B-A4FD-9BCFB8D1D3FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30BE6183-EAAA-405B-A4FD-9BCFB8D1D3FD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

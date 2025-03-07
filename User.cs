@@ -1,13 +1,35 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Reflection.Metadata.Ecma335;
-using System.Text.Json;
+﻿using System.Text.Json;
 using Npgsql;
 
 namespace Monster_Trading_Cards_Game;
 
 public class User
 {
-    private static readonly UserRepository _userRepo = new UserRepository();
+    public string Username { get; set; }
+    public string PasswordHash { get; set; }
+    public string Salt { get; set; }
+    public int Coins { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public int Elo { get; set; }
+    public string Token { get; set; }
+    public List<Card> PlayerCards { get; set; }
+    public List<Card> PlayerDeck { get; set; }
+
+    public void Win()
+    {
+        Wins++;
+        Elo += 3;
+    }
+
+    public void Loose()
+    {
+        Losses++;
+        Elo -= 5;
+    }
+    
+    private static readonly UserRepository UserRepo = new UserRepository();
+    private static readonly SecurityService Security = new SecurityService();
 
     public static async Task<(int statusCode, string responseBody)> RegisterUserAsync(ParsedRequest request)
     {
@@ -29,13 +51,13 @@ public class User
             var username = userData["username"];
             var password = userData["password"];
 
-            if (await _userRepo.UserExistsAsync(username))
+            if (await UserRepo.UserExistsAsync(username))
             {
                 return (409, JsonSerializer.Serialize(new { error = "User already exists" }));
             }
 
-            var (passwordHash, salt) = SecurityService.CalculatePasswordHashAndSalt(password);
-            await _userRepo.InsertUserAsync(username, passwordHash, salt);
+            var (passwordHash, salt) = Security.CalculatePasswordHashAndSalt(password);
+            await UserRepo.InsertUserAsync(username, passwordHash, salt);
 
             return (201, JsonSerializer.Serialize(new { message = "User registered successfully" }));
         }
@@ -64,20 +86,20 @@ public class User
             var username = loginData["username"];
             var password = loginData["password"];
 
-            var credentials = await _userRepo.GetUserCredentialsAsync(username);
+            var credentials = await UserRepo.GetUserCredentialsAsync(username);
             if (credentials == null)
             {
                 return (401, JsonSerializer.Serialize(new { error = "Invalid username or password" }));
             }
 
             var (storedHash, storedSalt) = credentials.Value;
-            if (!SecurityService.VerifyPassword(password, storedHash, storedSalt))
+            if (!Security.VerifyPassword(password, storedHash, storedSalt))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Invalid username or password" }));
             }
 
             var token = GenerateToken();
-            await _userRepo.UpdateUserTokenAsync(username, token);
+            await UserRepo.UpdateUserTokenAsync(username, token);
 
             return (200, JsonSerializer.Serialize(new { message = "Login successful", token }));
         }
@@ -93,12 +115,10 @@ public class User
         }
     }
     
-    // Returns all cards that have been acquired by the user
     public static async Task<(int statusCode, string responseBody)> GetCardsAsync(ParsedRequest request)
     {
         try
         {
-            // 🔹 Extract token from Authorization header
             if (!request.Headers.TryGetValue("Authorization", out var authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Missing or invalid token." }));
@@ -106,20 +126,18 @@ public class User
 
             var token = authHeader.Substring("Bearer ".Length).Trim();
 
-            // 🔹 Validate token and get user info
-            var (username, userCards) = await _userRepo.GetUserCardsAsync(token);
-            if (username == null)
+            var user = await UserRepo.GetUserByTokenAsync(token);
+            if (user == null)
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Invalid token." }));
             }
 
-            // 🔹 Check if user has cards
-            if (userCards.Count < 1)
+            if (user.PlayerCards.Count < 1)
             {
                 return (403, JsonSerializer.Serialize(new { error = "Player has no card." }));
             }
 
-            return (200, JsonSerializer.Serialize(new { message = "Cards retrieved successfully", cards = userCards }));
+            return (200, JsonSerializer.Serialize(new { message = "Cards retrieved successfully", cards = user.PlayerCards }));
         }
         catch (Exception ex)
         {
@@ -128,12 +146,10 @@ public class User
         }
     }
     
-    // Shows the users currently configured deck
     public static async Task <(int statusCode, string responseBody)> GetDeckAsync(ParsedRequest request)
     {
         try
         {
-            // 🔹 Extract token from Authorization header
             if (!request.Headers.TryGetValue("Authorization", out var authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Missing or invalid token." }));
@@ -141,22 +157,21 @@ public class User
 
             var token = authHeader.Substring("Bearer ".Length).Trim();
 
-            // 🔹 Validate token and get user info
-            var (username, userDeck) = await _userRepo.GetUserDeckAsync(token);
-            if (username == null)
+            var user = await UserRepo.GetUserByTokenAsync(token);
+            if (user == null)
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Invalid token." }));
             }
 
-            if (userDeck.Count < 1)
+            if (user.PlayerDeck.Count < 1)
             {   
-                // TODO: Replace 200 with 204. 204 doesnt work for some reason
+                // TODO: Replace 200 with 204. 204 doesnt work for some reason?
                 return (200, JsonSerializer.Serialize(
                         new { error = "The request was fine, but the deck doesn't have any cards" }));
             }
 
             return (200, JsonSerializer.Serialize
-                (new { message = "The deck has cards, the response contains these", deck = userDeck }));
+                (new { message = "The deck has cards, the response contains these", deck = user.PlayerDeck }));
         }
         catch (Exception ex)
         {
@@ -165,12 +180,10 @@ public class User
         }
     }
 
-    // Retrieve stats for the requested user
     public static async Task<(int statusCode, string responseBody)> GetStatsAsync(ParsedRequest request)
     {
         try
         {
-            // 🔹 Extract token from Authorization header
             if (!request.Headers.TryGetValue("Authorization", out var authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Missing or invalid token." }));
@@ -178,19 +191,19 @@ public class User
 
             var token = authHeader.Substring("Bearer ".Length).Trim();
 
-            // 🔹 Validate token and get user info
-            var (username, userCoins, userWins, userLosses, userElo) = await _userRepo.GetUserStatsAsync(token);
-            if (username == null)
+            var user = await UserRepo.GetUserByTokenAsync(token);
+            if (user == null)
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Invalid token." }));
             }
             return (200, JsonSerializer.Serialize(new 
             { 
                 message = "The stats could be retrieved successfully.", 
-                conins = userCoins,
-                wins = userWins,
-                losses = userLosses,
-                elo = userElo
+                conins = user.Coins,
+                wins = user.Wins,
+                losses = user.Losses,
+                elo = user.Elo
+                
             }));
             
         }
@@ -205,25 +218,12 @@ public class User
     {
         try
         {
-            // 🔹 Extract token from Authorization header
             if (!request.Headers.TryGetValue("Authorization", out var authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Missing or invalid token." }));
             }
-
-            var token = authHeader.Substring("Bearer ".Length).Trim();
             
-            // TODO: Auth
-            /*
-            // Validate token and get user info
-            var scoreboard = _userRepo.GetScoreboard();
-            if (scoreboard.Count < 1)
-            {
-                return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Invalid token." }));
-            }
-            */
-            
-            var scoreboard = await _userRepo.GetScoreboardAsync();
+            var scoreboard = await UserRepo.GetScoreboardAsync();
             
             var leaderboard = scoreboard.Select(s => new 
             {
@@ -247,7 +247,6 @@ public class User
     {
         try
         {
-            // 🔹 Extract token from Authorization header
             if (!request.Headers.TryGetValue("Authorization", out var authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Missing or invalid token." }));
@@ -255,14 +254,12 @@ public class User
 
             var token = authHeader.Substring("Bearer ".Length).Trim();
 
-            // 🔹 Validate token and get user info
-            var (username, userCards) = await _userRepo.GetUserCardsAsync(token);
-            if (username == null)
+            var user = await UserRepo.GetUserByTokenAsync(token);
+            if (user == null)
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Invalid token." }));
             }
             
-            // 🔹 Parse the request body (expected: { "cardIds": [1, 5, 3, 2] })
             using var document = JsonDocument.Parse(request.Body);
             var root = document.RootElement;
             if (!root.TryGetProperty("cardIds", out var cardIdsElement) || cardIdsElement.ValueKind != JsonValueKind.Array)
@@ -270,7 +267,6 @@ public class User
                 return (400, JsonSerializer.Serialize(new { error = "Invalid request format." }));
             }
 
-            // 🔹 Extract card IDs from JSON
             var cardIds = cardIdsElement.EnumerateArray().Select(c => c.GetInt32()).ToList();
 
             if (cardIds.Count != 4)
@@ -279,9 +275,8 @@ public class User
             }
 
             // Validate ownership (ensure all selected cards belong to the player)
-            var ownedCardIds = userCards
-                .Cast<JsonElement>()  // Ensure proper JSON handling
-                .Select(c => c.GetProperty("Id").GetInt32()) // Extract "Id" field as int
+            var ownedCardIds = user.PlayerCards
+                .Select(c => c.Id)  // Directly access the Id property of Card objects
                 .ToHashSet();
 
             if (!cardIds.All(id => ownedCardIds.Contains(id)))
@@ -289,8 +284,7 @@ public class User
                 return (403, JsonSerializer.Serialize(new { error = "You do not own some of the selected cards." }));
             }
 
-            // 🔹 Store deck in database
-            await _userRepo.SetUserDeckAsync(username, cardIds);
+            await UserRepo.SetUserDeckAsync(user.Username, cardIds);
             
             return (200, JsonSerializer.Serialize(new { message = "Deck updated successfully." }));
         }
@@ -306,7 +300,6 @@ public class User
     {
         try
         {
-            // Extract token from Authorization header
             if (!request.Headers.TryGetValue("Authorization", out var authHeader) || !authHeader.StartsWith("Bearer "))
             {
                 return (401, JsonSerializer.Serialize(new { error = "Unauthorized. Missing or invalid token." }));
@@ -314,7 +307,7 @@ public class User
 
             var token = authHeader.Substring("Bearer ".Length).Trim();
             
-            var logoutSuccessful = await _userRepo.LogoutUserAsync(token);
+            var logoutSuccessful = await UserRepo.LogoutUserAsync(token);
 
             if (!logoutSuccessful)
             {

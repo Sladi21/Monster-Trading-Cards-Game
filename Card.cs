@@ -1,22 +1,19 @@
 ﻿namespace Monster_Trading_Cards_Game;
 
-public enum CardType
-{
-    MonsterCard,
-    SpellCard
-};
-
-public enum ElementType
-{
-    Normal,
-    Fire,
-    Water
-};
-
 public class Card
 {
-    public string Name { get; private set; }
-    public int Damage { get; private set; }
-    public CardType Type { get; private set; }
-    public ElementType ElementType { get; private set; }
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int Damage { get; set; }
+    public string Element { get; set; }
+    public string CardType { get; set; }
+
+    public Card(int id, string name, int damage, string element, string cardType)
+    {
+        Id = id;
+        Name = name;
+        Damage = damage;
+        Element = element;
+        CardType = cardType;
+    }
 }
